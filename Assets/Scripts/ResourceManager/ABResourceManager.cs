@@ -5,23 +5,29 @@ using UnityEngine;
 
 public class ABResourceManager
 {
+    private enum LoadState { NotLoad, Loading, Loaded }
+
+    // ab引用计数
+    public int refCount;
+
     // 资源加载管理器
     private ABAssetRequestManager m_assetRequestManager;
 
     // AssetBundle实例
     private AssetBundle m_assetBundle;
 
-    // 加载中的Asset
-    private HashSet<string> m_loadingAsset = new HashSet<string>();
+    // 加载状态
+    private LoadState m_loadState;
     
-    // 加载中的资源请求
-    private List<ResourceRequestInternal> m_loadingAssetRequests = new List<ResourceRequestInternal>();
-
-    // 等待其它请求加载
-    private List<ResourceRequestInternal> m_waitOtherLoadingRequests = new List<ResourceRequestInternal>();
+    // 加载资源请求
+    public ResourceRequestInternal loadAssetRequest;
+    
+    // 等待的请求加载
+    private List<ResourceRequestInternal> m_waitLoadingRequests = new List<ResourceRequestInternal>();
 
     // 已加载的asset
-    private Dictionary<string, UnityEngine.Object> m_loadedAsset = new Dictionary<string, UnityEngine.Object>();
+    private Dictionary<string, UnityEngine.Object> m_assetsDict = new Dictionary<string, UnityEngine.Object>();
+    private UnityEngine.Object[] m_assets;
 
     public ABResourceManager(ABAssetRequestManager assetRequestManager, AssetBundle assetBundle)
     {
@@ -31,65 +37,70 @@ public class ABResourceManager
 
     public void Update()
     {
-        for (int i = m_loadingAssetRequests.Count - 1; i >= 0; --i)
+        if (m_loadState == LoadState.Loading)
         {
-            ResourceRequestInternal resourceRequest = m_loadingAssetRequests[i];
-            if (resourceRequest.outResourceRequest.isDone)
+            if (loadAssetRequest.loadAssetRequest != null && loadAssetRequest.loadAssetRequest.isDone)
             {
-                UnityEngine.Object[] assets = resourceRequest.loadAssetRequest.allAssets;
-                for (int j = 0; j < assets.Length; ++j)
+                m_assets = loadAssetRequest.loadAssetRequest.allAssets;
+                for (int j = 0; j < m_assets.Length; ++j)
                 {
-                    m_loadingAsset.Remove(assets[j].name);
-                    if (!m_loadedAsset.ContainsKey(assets[j].name))
-                        m_loadedAsset.Add(assets[j].name, assets[j]);
+                    var asset = m_assets[j];
+                    // Mesh格式的文件优先存储在dict中
+                    if (m_assetsDict.ContainsKey(asset.name) && asset is Mesh)
+                        m_assetsDict[asset.name] = asset;
+                    else
+                        m_assetsDict.Add(asset.name, asset);
                 }
-                m_loadingAssetRequests.RemoveAt(i);
+                m_loadState = LoadState.Loaded;
+                loadAssetRequest = null;
             }
         }
-        for (int i = m_waitOtherLoadingRequests.Count - 1; i >= 0; --i)
+        if (m_loadState == LoadState.Loaded && m_waitLoadingRequests.Count > 0)
         {
-            ResourceRequestInternal resourceRequest = m_waitOtherLoadingRequests[i];
-            if (m_loadedAsset.ContainsKey(resourceRequest.assetName))
+            for (int i = 0; i < m_waitLoadingRequests.Count; ++i)
             {
-                resourceRequest.outResourceRequest.isDone = true;
-                resourceRequest.outResourceRequest.asset = m_loadedAsset[resourceRequest.assetName];
-                m_waitOtherLoadingRequests.RemoveAt(i);
+                ResourceRequestInternal resourceRequest = m_waitLoadingRequests[i];
+                if (m_assetsDict.ContainsKey(resourceRequest.assetName))
+                {
+                    resourceRequest.outResourceRequest.isDone = true;
+                    resourceRequest.outResourceRequest.asset = m_assetsDict[resourceRequest.assetName];
+                }
+                else
+                    Debug.LogFormat("asset not fount {0},{1}", resourceRequest.abPath, resourceRequest.assetName);
             }
+            m_waitLoadingRequests.Clear();
         }
     }
 
     public void LoadAssetAsync(ResourceRequestInternal resourceRequest)
     {
+        ++refCount;
         // assetName为空，不需要加载，如依赖AB
         if (string.IsNullOrEmpty(resourceRequest.assetName))
         {
             resourceRequest.outResourceRequest.isDone = true;
+            return;
         }
-        // 已加载
-        else if (m_loadedAsset.ContainsKey(resourceRequest.assetName))
+
+        switch (m_loadState)
         {
-            resourceRequest.outResourceRequest.asset = m_loadedAsset[resourceRequest.assetName];
-            resourceRequest.outResourceRequest.isDone = true;
-        }
-        // 加载中，等待其它请求加载完成
-        else if (m_loadingAsset.Contains(resourceRequest.assetName))
-        {
-            m_waitOtherLoadingRequests.Add(resourceRequest);
-        }
-        // 未加载
-        else
-        {
-            resourceRequest.assetBundle = m_assetBundle;
-            bool isLoadAllAsset = m_assetRequestManager.LoadAssetAsync(resourceRequest);
-            if (isLoadAllAsset)
-            {
-                string[] assetNames = m_assetBundle.GetAllAssetNames();
-                for (int i = 0; i < assetNames.Length; ++i)
-                    m_loadingAsset.Add(assetNames[i]);
-            }
-            else
-                m_loadingAsset.Add(resourceRequest.assetName);
-            m_loadingAssetRequests.Add(resourceRequest);
+            case LoadState.NotLoad:
+                resourceRequest.assetBundle = m_assetBundle;
+                m_assetRequestManager.LoadAllAssetAsync(resourceRequest);
+                loadAssetRequest = resourceRequest;
+                m_waitLoadingRequests.Add(resourceRequest);
+                m_loadState = LoadState.Loading;
+                break;
+            case LoadState.Loading:
+                m_waitLoadingRequests.Add(resourceRequest);
+                break;
+            case LoadState.Loaded:
+                if (m_assetsDict.ContainsKey(resourceRequest.assetName))
+                    resourceRequest.outResourceRequest.asset = m_assetsDict[resourceRequest.assetName];
+                else
+                    Debug.LogFormat("asset not fount {0},{1}", resourceRequest.abPath, resourceRequest.assetName);
+                resourceRequest.outResourceRequest.isDone = true;
+                break;
         }
     }
 }

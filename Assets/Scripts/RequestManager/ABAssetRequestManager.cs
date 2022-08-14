@@ -13,7 +13,7 @@ public class ABAssetRequestManager
     private List<ResourceRequestInternal> m_activeRequest = new List<ResourceRequestInternal>();
 
     // 同时活动的最大请求数
-    private static int activeQuestCount = 10;
+    private static int activeQuestCount = 20;
 
     public void Update()
     {
@@ -43,20 +43,14 @@ public class ABAssetRequestManager
     private void ProcessOneLoadRequest()
     {
         ResourceRequestInternal request = m_waitingRequest.Dequeue();
-        // fbx中的Mesh必须使用LoadAssetAsync，否则无法加载
-        if (request.type == typeof(Mesh))
-            request.loadAssetRequest = request.assetBundle.LoadAllAssetsAsync();
-        else
-            request.loadAssetRequest = request.assetBundle.LoadAssetAsync(request.assetName, request.type);
+        request.loadAssetRequest = request.assetBundle.LoadAllAssetsAsync();
         m_activeRequest.Add(request);
     }
 
     // 异步加载asset
-    // 返回是否需要加载ab中所有资源，若为Mesh类型则需要
-    public bool LoadAssetAsync(ResourceRequestInternal request)
+    public void LoadAllAssetAsync(ResourceRequestInternal request)
     {
         m_waitingRequest.Enqueue(request);
-        return request.type == typeof(Mesh);
     }
 
     #region 调试信息

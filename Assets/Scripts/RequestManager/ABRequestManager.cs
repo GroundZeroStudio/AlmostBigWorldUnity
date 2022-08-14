@@ -13,7 +13,7 @@ public class ABRequestManager
     private List<ResourceRequestInternal> m_activeRequest = new List<ResourceRequestInternal>();
     
     // 同时活动的最大请求数
-    private static int activeQuestCount = 10;
+    private static int activeQuestCount = 20;
 
     public void Update()
     {

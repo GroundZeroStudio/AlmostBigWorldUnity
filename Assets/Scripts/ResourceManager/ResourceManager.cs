@@ -20,8 +20,8 @@ public class ResourceManager : SingletonClass<ResourceManager>
     private Dictionary<string, ABResourceManager> m_abResManagerDict = new Dictionary<string, ABResourceManager>();
     private List<ABResourceManager> m_abResManagers = new List<ABResourceManager>();
 
-    // 加载中的ab
-    private HashSet<string> m_loadingAB = new HashSet<string>();
+    // 加载中的ab，键值为加载中的引用计数
+    private Dictionary<string, int> m_loadingAB = new Dictionary<string, int>();
 
     // 加载中的ab请求
     private List<ResourceRequestInternal> m_loadingABRequests = new List<ResourceRequestInternal>();
@@ -59,9 +59,10 @@ public class ResourceManager : SingletonClass<ResourceManager>
             ResourceRequestInternal resourceRequest = m_loadingABRequests[i];
             if (resourceRequest.assetBundle != null)
             {
-                m_loadingAB.Remove(m_loadingABRequests[i].abPath);
                 m_loadingABRequests.RemoveAt(i);
                 ABResourceManager abResourceManager = new ABResourceManager(m_assetRequestManager, resourceRequest.assetBundle);
+                abResourceManager.refCount = m_loadingAB[resourceRequest.abPath];
+                m_loadingAB.Remove(resourceRequest.abPath);
                 m_abResManagerDict.Add(resourceRequest.abPath, abResourceManager);
                 m_abResManagers.Add(abResourceManager);
                 ProcessLoadAsset(resourceRequest);
@@ -116,17 +117,19 @@ public class ResourceManager : SingletonClass<ResourceManager>
         // 当前已包含资源，直接加载asset
         if (m_abResManagerDict.ContainsKey(resourceRequest.abPath))
         {
+            ++m_abResManagerDict[resourceRequest.abPath].refCount;
             ProcessLoadAsset(resourceRequest);
         }
         // AB已在加载中，加入等待其它请求中的ab完成
-        else if (m_loadingAB.Contains(resourceRequest.abPath))
+        else if (m_loadingAB.ContainsKey(resourceRequest.abPath))
         {
+            ++m_loadingAB[resourceRequest.abPath];
             m_waitOtherLoadABRequests.Add(resourceRequest);
         }
         // AB未加载，先加载AB，再加载资源
         else
         {
-            m_loadingAB.Add(resourceRequest.abPath);
+            m_loadingAB.Add(resourceRequest.abPath, 1);
 
             // 检测依赖项
             string[] depABPaths = mainifest.GetAllDependencies(resourceRequest.abPath);
@@ -194,5 +197,10 @@ public class ResourceManager : SingletonClass<ResourceManager>
     {
         return m_assetRequestManager.GetWaitingRequestCount();
     }
+    public Dictionary<string, ABResourceManager> GetABResManagerDict()
+    {
+        return m_abResManagerDict;
+    }
+
     #endregion
 }
