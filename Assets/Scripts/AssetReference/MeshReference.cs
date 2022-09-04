@@ -33,36 +33,57 @@ public class MeshReference : MonoBehaviour
     public MeshFilter meshFilter;
     public MeshRenderer meshRenderer;
 
-    private bool _isLoading;
+    private LoadState m_loadState;
     private ResourceRequset meshLoadRequest;
-    private List<ResourceRequset> materialRequests;
+    private ResourceRequset[] materialRequests;
 
     public void LoadAssetAsync()
     {
-        _isLoading = true;
-        meshLoadRequest = ResourceManager.Instance.LoadAssetAsync(mesh.abPath, mesh.assetName, typeof(Mesh));
-        materialRequests = new List<ResourceRequset>();
-        for (int i = 0; i < materials.Length; ++i)
+        if (m_loadState != LoadState.NotLoad)
+            return;
+        m_loadState = LoadState.Loading;
+        if (meshFilter != null)
+            meshLoadRequest = ResourceManager.Instance.LoadAssetAsync(mesh.abPath, mesh.assetName, typeof(Mesh));
+
+        if (meshRenderer != null)
         {
-            ResourceRequset req = ResourceManager.Instance.LoadAssetAsync(materials[i].abPath, materials[i].assetName, typeof(Material));
-            materialRequests.Add(req);
+            materialRequests = new ResourceRequset[materials.Length];
+            for (int i = 0; i < materials.Length; ++i)
+            {
+                ResourceRequset req = ResourceManager.Instance.LoadAssetAsync(materials[i].abPath, materials[i].assetName, typeof(Material));
+                materialRequests[i] = req;
+            }
         }
+    }
+
+    public void Unload()
+    {
+        if (m_loadState == LoadState.NotLoad)
+            return;
+        m_loadState = LoadState.NotLoad;
+        if (meshFilter != null)
+            meshFilter.sharedMesh = null;
+        if (meshRenderer != null)
+            meshRenderer.materials = new Material[0];
+        ResourceManager.Instance.UnloadWithStatistics(mesh.abPath);
+        for (int i = 0; i < materials.Length; ++i)
+            ResourceManager.Instance.UnloadWithStatistics(materials[i].abPath);
     }
 
     private void Update()
     {
-        if (!_isLoading)
+        if (m_loadState != LoadState.Loading)
             return;
-        if (meshLoadRequest != null && meshFilter != null && meshLoadRequest.isDone)
+        if (meshLoadRequest != null && meshLoadRequest.isDone)
         {
             meshFilter.sharedMesh = meshLoadRequest.asset as Mesh;
             meshLoadRequest = null;
         }
 
-        if (materialRequests != null && meshRenderer != null)
+        if (materialRequests != null)
         {
             bool allMatDone = true;
-            for (int i = 0; i < materialRequests.Count; ++i)
+            for (int i = 0; i < materialRequests.Length; ++i)
             {
                 if (!materialRequests[i].isDone)
                 {
@@ -72,7 +93,7 @@ public class MeshReference : MonoBehaviour
             }
             if (allMatDone)
             {
-                Material[] materials = new Material[materialRequests.Count];
+                Material[] materials = new Material[materialRequests.Length];
                 for (int i = 0; i < materials.Length; ++i)
                     materials[i] = materialRequests[i].asset as Material;
                 meshRenderer.sharedMaterials = materials;
@@ -80,7 +101,7 @@ public class MeshReference : MonoBehaviour
             }
         }
 
-        if (meshLoadRequest == null && materialRequests == null)
-            _isLoading = false;
+        if (meshLoadRequest == null && (materialRequests == null || materialRequests.Length == 0))
+            m_loadState = LoadState.Loaded;
     }
 }

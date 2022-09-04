@@ -7,6 +7,7 @@ using UnityEngine.UI;
 public class UILoadTest : MonoBehaviour
 {
     public Button startLoadBtn;
+    public Button unloadBtn;
     public Text waitLoadRequest;
     public Text waitOtherLoadRequest;
     public Text abActiveLoadRequest;
@@ -14,18 +15,46 @@ public class UILoadTest : MonoBehaviour
     public Text waitDepRequest;
     public Text assetWaitLoadRequest;
     public Text assetActiveLoadRequest;
+    public Text totalAssetCount;
+    public Text waitUnloadABCount;
 
     AsyncOperation m_loadSceneReq;
+
+    private void Start()
+    {
+        unloadBtn.gameObject.SetActive(false);
+    }
+
+
     public void OnStartLoadBtn()
     {
         startLoadBtn.gameObject.SetActive(false);
-        m_loadSceneReq = SceneManager.LoadSceneAsync("CityScene_streaming", LoadSceneMode.Additive);
-        //StartCoroutine(UpdateDebugInfoCoroutine());
+        unloadBtn.gameObject.SetActive(true);
+        if (SceneRootAssetReference.instance == null)
+            m_loadSceneReq = SceneManager.LoadSceneAsync("CityScene_streaming", LoadSceneMode.Additive);
+        else
+            SceneRootAssetReference.instance.LoadAll();
+    }
+
+    public void OnUnloadBtn()
+    {
+        if (SceneRootAssetReference.instance != null)
+        {
+            SceneRootAssetReference.instance.UnloadAll();
+            unloadBtn.gameObject.SetActive(false);
+        }
+        StartCoroutine(DelayShowLoadBtn());
     }
 
     private void Update()
     {
         UpdateDebugInfo();
+
+        if (Input.GetKeyDown(KeyCode.F1))
+            OnStartLoadBtn();
+
+        if (Input.GetKeyDown(KeyCode.F2))
+            OnUnloadBtn();
     }
 
     IEnumerator UpdateDebugInfoCoroutine()
@@ -46,5 +75,13 @@ public class UILoadTest : MonoBehaviour
         waitDepRequest.text = "loading ab wait dep requests:" + ResourceManager.Instance.GetABWaitingRequestCount();
         assetWaitLoadRequest.text = "asset waiting requests:" + ResourceManager.Instance.GetAssetWaitingLoadRequestCount();
         assetActiveLoadRequest.text = "asset active requests:" + ResourceManager.Instance.GetAssetActiveLoadRequestCount();
+        totalAssetCount.text = "total asset count:" + ResourceManager.Instance.totalAssetCount;
+        waitUnloadABCount.text = "wait unload ab count:" + ResourceManager.Instance.GetWaitUnloadABCount();
+    }
+
+    IEnumerator DelayShowLoadBtn()
+    {
+        yield return new WaitForSeconds(5);
+        startLoadBtn.gameObject.SetActive(true);
     }
 }

@@ -5,8 +5,6 @@ using UnityEngine;
 
 public class ABResourceManager
 {
-    private enum LoadState { NotLoad, Loading, Loaded }
-
     // ab引用计数
     public int refCount;
 
@@ -102,5 +100,10 @@ public class ABResourceManager
                 resourceRequest.outResourceRequest.isDone = true;
                 break;
         }
+    }
+
+    public void UnloadAssetBundle()
+    {
+        m_assetBundle.Unload(true);
     }
 }

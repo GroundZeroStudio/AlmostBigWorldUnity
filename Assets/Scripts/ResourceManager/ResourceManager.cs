@@ -20,8 +20,11 @@ public class ResourceManager : SingletonClass<ResourceManager>
     private Dictionary<string, ABResourceManager> m_abResManagerDict = new Dictionary<string, ABResourceManager>();
     private List<ABResourceManager> m_abResManagers = new List<ABResourceManager>();
 
-    // 加载中的ab，键值为加载中的引用计数
-    private Dictionary<string, int> m_loadingAB = new Dictionary<string, int>();
+    // 已加载ab依赖
+    private Dictionary<string, string[]> m_depABDict = new Dictionary<string, string[]>();
+
+    // 加载中的ab
+    private HashSet<string> m_loadingAB = new HashSet<string>();
 
     // 加载中的ab请求
     private List<ResourceRequestInternal> m_loadingABRequests = new List<ResourceRequestInternal>();
@@ -31,6 +34,9 @@ public class ResourceManager : SingletonClass<ResourceManager>
 
     // 等待其它ab请求完成列表
     private List<ResourceRequestInternal> m_waitDependencyLoadABRequests = new List<ResourceRequestInternal>();
+
+    // ab卸载队列
+    private ABUnloadQueue m_abUnloadQueue = new ABUnloadQueue();
 
     // ab依赖相关
     private AssetBundle mainAssetBundle;
@@ -48,6 +54,7 @@ public class ResourceManager : SingletonClass<ResourceManager>
     {
         m_assetRequestManager.Update();
         m_abRequestManager.Update();
+        m_abUnloadQueue.Update();
 
         // 已加载ab资源管理器更新
         for (int i = 0; i < m_abResManagers.Count; ++i)
@@ -61,7 +68,6 @@ public class ResourceManager : SingletonClass<ResourceManager>
             {
                 m_loadingABRequests.RemoveAt(i);
                 ABResourceManager abResourceManager = new ABResourceManager(m_assetRequestManager, resourceRequest.assetBundle);
-                abResourceManager.refCount = m_loadingAB[resourceRequest.abPath];
                 m_loadingAB.Remove(resourceRequest.abPath);
                 m_abResManagerDict.Add(resourceRequest.abPath, abResourceManager);
                 m_abResManagers.Add(abResourceManager);
@@ -103,6 +109,7 @@ public class ResourceManager : SingletonClass<ResourceManager>
     {
         if (string.IsNullOrEmpty(abPath))
             return null;
+        ++totalAssetCount;
         ResourceRequestInternal resourceRequest = new ResourceRequestInternal();
         resourceRequest.abPath = abPath;
         resourceRequest.assetName = assetName;
@@ -110,6 +117,39 @@ public class ResourceManager : SingletonClass<ResourceManager>
         resourceRequest.outResourceRequest = new ResourceRequset();
         ProcessLoadAssetBunlde(resourceRequest);
         return resourceRequest.outResourceRequest;
+    }
+
+    public void UnloadWithStatistics(string abPath)
+    {
+        if (!string.IsNullOrEmpty(abPath))
+            --totalAssetCount;
+        Unload(abPath);
+    }
+
+    public void Unload(string abPath)
+    {
+        if (string.IsNullOrEmpty(abPath))
+            return;
+        if (m_abResManagerDict.ContainsKey(abPath))
+        {
+            ABResourceManager abResManager = m_abResManagerDict[abPath];
+            --abResManager.refCount;
+            if (abResManager.refCount == 0)
+            {
+                m_abUnloadQueue.Add(abPath, abResManager);
+                m_abResManagerDict.Remove(abPath);
+                if (m_depABDict.ContainsKey(abPath))
+                {
+                    string[] depAB = m_depABDict[abPath];
+                    for (int i = 0; i < depAB.Length; ++i)
+                        Unload(depAB[i]);
+                }
+            }
+            else if (abResManager.refCount < 0)
+                Debug.Log("ref count < 0, " + abPath);
+        }
+        else
+            Debug.Log("unload can't find " + abPath);
     }
     
     private void ProcessLoadAssetBunlde(ResourceRequestInternal resourceRequest)
@@ -121,18 +161,19 @@ public class ResourceManager : SingletonClass<ResourceManager>
             ProcessLoadAsset(resourceRequest);
         }
         // AB已在加载中，加入等待其它请求中的ab完成
-        else if (m_loadingAB.ContainsKey(resourceRequest.abPath))
+        else if (m_loadingAB.Contains(resourceRequest.abPath))
         {
-            ++m_loadingAB[resourceRequest.abPath];
             m_waitOtherLoadABRequests.Add(resourceRequest);
         }
         // AB未加载，先加载AB，再加载资源
         else
         {
-            m_loadingAB.Add(resourceRequest.abPath, 1);
+            m_loadingAB.Add(resourceRequest.abPath);
 
             // 检测依赖项
             string[] depABPaths = mainifest.GetAllDependencies(resourceRequest.abPath);
+            if (!m_depABDict.ContainsKey(resourceRequest.abPath))
+                m_depABDict.Add(resourceRequest.abPath, depABPaths);
             List<ResourceRequestInternal> depRequests = null;
             for (int i = 0; i < depABPaths.Length; ++i)
             {
@@ -169,6 +210,8 @@ public class ResourceManager : SingletonClass<ResourceManager>
     }
 
     #region 调试信息
+    public int totalAssetCount;
+
     public int GetLoadingRequestCount()
     {
         return m_loadingABRequests.Count;
@@ -201,6 +244,9 @@ public class ResourceManager : SingletonClass<ResourceManager>
     {
         return m_abResManagerDict;
     }
-
+    public int GetWaitUnloadABCount()
+    {
+        return m_abUnloadQueue.GetWaitUnloadABCount();
+    }
     #endregion
 }
