@@ -1,0 +1,3 @@
+[submodule "Assets/StreamingAssets"]
+	path = Assets/StreamingAssets
+	url = https://github.com/frostmourncn/AlmostBigWorldUnity_Asset.git
