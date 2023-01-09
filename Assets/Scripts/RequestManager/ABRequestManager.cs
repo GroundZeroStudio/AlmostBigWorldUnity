@@ -7,13 +7,13 @@ using UnityEngine;
 public class ABRequestManager
 {
     // 等待中加载请求
-    private Queue<ResourceRequestInternal> m_waitingRequest = new Queue<ResourceRequestInternal>();
+    private Queue<ResourceRequestShared> m_waitingRequest = new Queue<ResourceRequestShared>();
 
     // 活动中加载的请求
-    private List<ResourceRequestInternal> m_activeRequest = new List<ResourceRequestInternal>();
+    private List<ResourceRequestShared> m_activeRequest = new List<ResourceRequestShared>();
     
     // 同时活动的最大请求数
-    private static int activeQuestCount = 20;
+    private static int activeQuestCount = 5;
 
     public void Update()
     {
@@ -26,9 +26,7 @@ public class ABRequestManager
         {
             if (m_activeRequest[i].abRequest.isDone)
             {
-                ResourceRequestInternal request = m_activeRequest[i];
-                request.assetBundle = request.abRequest.assetBundle;
-                request.abRequest = null;
+                ResourceRequestShared request = m_activeRequest[i];
                 m_activeRequest.RemoveAt(i);
             }
         }
@@ -37,14 +35,14 @@ public class ABRequestManager
     // 发起一个加载请求
     private void ProcessOneLoadRequest()
     {
-        ResourceRequestInternal request = m_waitingRequest.Dequeue();
+        ResourceRequestShared request = m_waitingRequest.Dequeue();
         string abPath = Path.Combine(Application.streamingAssetsPath, "AssetBundles", request.abPath);
         request.abRequest = AssetBundle.LoadFromFileAsync(abPath);
         m_activeRequest.Add(request);
     }
 
     // 异步加载bundle
-    public void LoadAssetBundleAsync(ResourceRequestInternal request)
+    public void LoadAssetBundleAsync(ResourceRequestShared request)
     {
         m_waitingRequest.Enqueue(request);
     }

@@ -7,13 +7,13 @@ using UnityEngine;
 public class ABAssetRequestManager
 {
     // 等待中加载请求
-    private Queue<ResourceRequestInternal> m_waitingRequest = new Queue<ResourceRequestInternal>();
+    private Queue<ResourceRequestShared> m_waitingRequest = new Queue<ResourceRequestShared>();
 
     // 活动中加载的请求
-    private List<ResourceRequestInternal> m_activeRequest = new List<ResourceRequestInternal>();
+    private List<ResourceRequestShared> m_activeRequest = new List<ResourceRequestShared>();
 
     // 同时活动的最大请求数
-    private static int activeQuestCount = 20;
+    private static int activeQuestCount = 5;
 
     public void Update()
     {
@@ -21,34 +21,24 @@ public class ABAssetRequestManager
         while (m_waitingRequest.Count > 0 && m_activeRequest.Count < activeQuestCount)
             ProcessOneLoadRequest();
 
-        // 处理已完成加载bundle请求
+        // 处理已完成加载asset请求
         for (int i = m_activeRequest.Count - 1; i >= 0; --i)
         {
             if (m_activeRequest[i].loadAssetRequest.isDone)
-            {
-                ResourceRequestInternal request = m_activeRequest[i];
-                UnityEngine.Object[] allAssets = request.loadAssetRequest.allAssets;
-                for (int j = 0; j < allAssets.Length; ++j)
-                {
-                    if (allAssets[j].name == request.assetName)
-                        request.outResourceRequest.asset = allAssets[j];
-                }
-                request.outResourceRequest.isDone = true;
                 m_activeRequest.RemoveAt(i);
-            }
         }
     }
 
     // 发起一个加载请求
     private void ProcessOneLoadRequest()
     {
-        ResourceRequestInternal request = m_waitingRequest.Dequeue();
+        ResourceRequestShared request = m_waitingRequest.Dequeue();
         request.loadAssetRequest = request.assetBundle.LoadAllAssetsAsync();
         m_activeRequest.Add(request);
     }
 
     // 异步加载asset
-    public void LoadAllAssetAsync(ResourceRequestInternal request)
+    public void LoadAllAssetAsync(ResourceRequestShared request)
     {
         m_waitingRequest.Enqueue(request);
     }

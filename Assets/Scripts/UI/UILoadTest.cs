@@ -8,6 +8,7 @@ public class UILoadTest : MonoBehaviour
 {
     public Button startLoadBtn;
     public Button unloadBtn;
+    public Button cameraAnimBtn;
     public Text waitLoadRequest;
     public Text waitOtherLoadRequest;
     public Text abActiveLoadRequest;
@@ -23,6 +24,7 @@ public class UILoadTest : MonoBehaviour
     private void Start()
     {
         unloadBtn.gameObject.SetActive(false);
+        cameraAnimBtn.gameObject.SetActive(false);
     }
 
 
@@ -30,10 +32,11 @@ public class UILoadTest : MonoBehaviour
     {
         startLoadBtn.gameObject.SetActive(false);
         unloadBtn.gameObject.SetActive(true);
+        cameraAnimBtn.gameObject.SetActive(true);
         if (SceneRootAssetReference.instance == null)
             m_loadSceneReq = SceneManager.LoadSceneAsync("CityScene_streaming", LoadSceneMode.Additive);
-        else
-            SceneRootAssetReference.instance.LoadAll();
+        //else
+        //    SceneRootAssetReference.instance.LoadVisible();
     }
 
     public void OnUnloadBtn()
@@ -44,6 +47,11 @@ public class UILoadTest : MonoBehaviour
             unloadBtn.gameObject.SetActive(false);
         }
         StartCoroutine(DelayShowLoadBtn());
+    }
+
+    public void OnCameraAnimBtn()
+    {
+        CameraAnimTest.Instance.Play();
     }
 
     private void Update()

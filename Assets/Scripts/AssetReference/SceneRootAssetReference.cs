@@ -11,16 +11,19 @@ public class SceneRootAssetReference : MonoBehaviour
     private void Start()
     {
         instance = this;
-        LoadAll();
+        SceneVisible.Instance.ProcessVisible();
     }
 
-    public void LoadAll()
+    /*
+    public void LoadVisible()
     {
         for (int i = 0; i < meshReferences.Count; ++i)
         {
-            meshReferences[i].LoadAssetAsync();
+            if (meshReferences[i].isVisible)
+                meshReferences[i].LoadAssetAsync();
         }
     }
+    */
 
     public void UnloadAll()
     {
@@ -33,5 +36,9 @@ public class SceneRootAssetReference : MonoBehaviour
     private void Update()
     {
         ResourceManager.Instance.Update();
+        for (int i = 0; i < meshReferences.Count; ++i)
+        {
+            meshReferences[i].OnUpdate();
+        }
     }
 }
